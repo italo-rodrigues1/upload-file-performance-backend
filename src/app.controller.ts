@@ -22,23 +22,25 @@ export class UploadFileController {
   ) {
     console.log('req', req.body);
     console.log(file);
+
     if (!file) {
       throw new Error('No file uploaded');
     }
 
     const { totalChunks, chunkNumber, fileName } = req.body;
 
-    console.log('req.body', totalChunks, chunkNumber);
+    if (!totalChunks || !chunkNumber || !fileName) {
+      throw new Error('Missing required parameters');
+    }
 
     await this.uploadFileService.upload({
-      file,
-      resumable: {
-        resumableChunkNumber: Number(chunkNumber),
-        resumableCurrentChunkSize: file[0].size,
-        resumableTotalChunks: Number(totalChunks),
-        resumableFilename: fileName,
+      file: file[0],
+      fileInfo: {
+        chunkNumber,
+        currentChunkSize: file[0].size,
+        totalChunks: totalChunks,
+        fileName,
       },
     });
-    return { status: 'success', file };
   }
 }

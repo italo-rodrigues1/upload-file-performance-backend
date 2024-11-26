@@ -2,11 +2,11 @@ import { BlobServiceClient } from '@azure/storage-blob';
 import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 
-interface Resumable {
-  resumableChunkNumber: number;
-  resumableCurrentChunkSize: number;
-  resumableTotalChunks: number;
-  resumableFilename: string;
+interface FileInfo {
+  chunkNumber: number;
+  currentChunkSize: number;
+  totalChunks: number;
+  fileName: string;
 }
 
 @Injectable()
@@ -48,46 +48,34 @@ export class UploadFileService {
 
   async upload({
     file,
-    resumable,
+    fileInfo,
   }: {
-    file: any;
-    resumable: Resumable;
+    file: Express.Multer.File;
+    fileInfo: FileInfo;
   }): Promise<void> {
-    const {
-      resumableChunkNumber,
-      resumableCurrentChunkSize,
-      resumableTotalChunks,
-      resumableFilename,
-    } = resumable;
+    const { chunkNumber, currentChunkSize, totalChunks, fileName } = fileInfo;
 
     try {
       const blobServiceContainer = await this.initializeBlobService('files');
-      const blockBlobClient =
-        blobServiceContainer.getBlockBlobClient(resumableFilename);
+      const blockBlobClient = blobServiceContainer.getBlockBlobClient(fileName);
 
       const blockIdBase64 = Buffer.from(
-        `block-${resumableChunkNumber.toString().padStart(6, '0')}`,
+        `block-${chunkNumber.toString().padStart(6, '0')}`,
       ).toString('base64');
 
       await blockBlobClient.stageBlock(
         blockIdBase64,
-        file[0].buffer,
-        resumableCurrentChunkSize,
+        file.buffer,
+        currentChunkSize,
       );
 
-      console.log('blockIdBase64', blockIdBase64);
+      if (chunkNumber === totalChunks) {
+        const blockList = Array.from({ length: totalChunks }, (_, i) => {
+          return Buffer.from(
+            `block-${(i + 1).toString().padStart(6, '0')}`,
+          ).toString('base64');
+        });
 
-      if (resumableChunkNumber === resumableTotalChunks) {
-        const blockList = Array.from(
-          { length: resumableTotalChunks },
-          (_, i) => {
-            return Buffer.from(
-              `block-${(i + 1).toString().padStart(6, '0')}`,
-            ).toString('base64');
-          },
-        );
-
-        console.log('blockList', blockList);
         await blockBlobClient.commitBlockList(blockList);
       }
     } catch (e) {
